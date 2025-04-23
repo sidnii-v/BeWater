@@ -1,0 +1,2682 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BeWater</title>
+<style>
+body, html { overflow-x: hidden; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background-color: #1a2639;
+            font-family: monospace;
+            color: #a7b6c7;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+            background: linear-gradient(to bottom, 
+                /* Sky section - 15% */
+                #2c3e50 0%, 
+                #344963 8%,
+                #3a5472 15%,
+                /* Ocean horizon line with subtle transition */
+                #3c5a78 15.5%,
+                /* Ocean gradient - 75% */
+                #3c5a78 16%, 
+                #365472 30%,
+                #304b68 40%,
+                #2a425e 50%,
+                #243952 60%,
+                #1e3046 70%,
+                #1a2639 80%,
+                #152030 90%,
+                /* Ocean floor - 10% */
+                #101824 100%);
+        }
+        
+        #horizon {
+            position: absolute;
+            top: 15vh;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background-color: #6c8bab;
+            opacity: 0.5;
+        }
+        
+        #ocean {
+            position: absolute;
+            top: 15vh;
+            left: 0;
+            width: 100%;
+            height: 85vh;
+            overflow: hidden;
+        }
+        
+        .character-fish {
+            position: absolute;
+            font-size: 16px;
+            color: rgba(167, 182, 199, 0.7);
+            pointer-events: none;
+            text-shadow: 0 0 3px rgba(167, 182, 199, 0.3);
+            transition: transform 0.3s ease-out;
+        }
+        
+        .ascii-art-container {
+            position: absolute;
+            z-index: 200;
+            pointer-events: none;
+            white-space: pre;
+            font-family: monospace;
+            color: rgba(167, 182, 199, 0.9);
+            text-shadow: 0 0 5px rgba(167, 182, 199, 0.5);
+        }
+        
+        /* Track morphing cooldowns */
+        .morph-cooldown {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #a7b6c7;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            color: #a7b6c7;
+            font-size: 14px;
+            opacity: 0.7;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        /* Pixel texture overlay */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAABZJREFUeNpi/M/A8J+RkZGRATsACDAADQAGLyizrw8AAAAASUVORK5CYII=');
+            pointer-events: none;
+            opacity: 0.3;
+            z-index: 1000;
+        }
+        
+        /* Ocean wave animation */
+        #ocean::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: repeating-linear-gradient(
+                transparent,
+                transparent 50px,
+                rgba(167, 182, 199, 0.05) 50px,
+                rgba(167, 182, 199, 0.05) 51px
+            );
+            animation: waveMotion 20s linear infinite;
+        }
+        
+        @keyframes waveMotion {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        
+        /* Water particles */
+        .water-particles {
+            position: absolute;
+            width: 100%;
+            height: 85vh;
+            top: 15vh;
+            left: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 20;
+        }
+        
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+        
+        /* Character burst container */
+        .character-burst-container {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        /* Pixel wave animation */
+        @keyframes waveRipple {
+            0% { transform: translateY(0); opacity: 0.95; }
+            25% { transform: translateY(-8px); opacity: 1; }
+            50% { transform: translateY(-15px); opacity: 0.9; }
+            75% { transform: translateY(-25px); opacity: 0.6; }
+            100% { transform: translateY(-40px); opacity: 0; }
+        }
+        
+        @keyframes wavePeakFloat {
+            0% { transform: translateY(0) rotate(0deg); opacity: 0.95; }
+            30% { transform: translateY(-15px) translateX(5px) rotate(8deg); opacity: 1; }
+            60% { transform: translateY(-30px) translateX(10px) rotate(15deg); opacity: 0.7; }
+            100% { transform: translateY(-45px) translateX(15px) rotate(20deg); opacity: 0; }
+        }
+        
+        @keyframes waveBase {
+            0% { transform: translateY(0); opacity: 0.95; }
+            30% { transform: translateY(-5px); opacity: 1; }
+            70% { transform: translateY(-15px); opacity: 0.8; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
+        
+        @keyframes waveSplash {
+            0% { transform: translateY(0) scale(1); opacity: 0.9; }
+            50% { opacity: 1; transform: translateY(-20px) translateX(3px) scale(0.7); }
+            100% { transform: translateY(-35px) translateX(6px) scale(0.3); opacity: 0; }
+        }
+        
+        /* Right-click ripple effect */
+        .ripple-effect {
+            position: absolute;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+            opacity: 0;
+            animation: rippleExpand 1.5s cubic-bezier(0.1, 0.5, 0.1, 1) forwards;
+        }
+        
+        @keyframes rippleExpand {
+            0% { transform: scale(0.2); opacity: 0; }
+            20% { opacity: 0.8; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        
+        /* Character animation from ripple */
+        @keyframes charFromRipple {
+            0% { transform: scale(0.1) rotate(0deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+            100% { transform: scale(1.0) rotate(360deg); opacity: 0.8; }
+        }
+        
+        /* Morph animation container */
+        #ascii-morph-container {
+            position: absolute;
+            z-index: 300;
+            pointer-events: none;
+            white-space: pre;
+            font-family: monospace;
+            color: rgba(167, 182, 199, 0.9);
+            text-shadow: 0 0 5px rgba(167, 182, 199, 0.5);
+            display: none;
+        }
+        
+        /* Character glow effect during transformation */
+        @keyframes charGlow {
+            0% { text-shadow: 0 0 5px rgba(167, 182, 199, 0.5); color: rgba(167, 182, 199, 0.7); }
+            50% { text-shadow: 0 0 20px rgba(167, 182, 199, 0.9); color: rgba(220, 230, 240, 1); }
+            100% { text-shadow: 0 0 5px rgba(167, 182, 199, 0.5); color: rgba(167, 182, 199, 0.7); }
+        }
+        
+        /* Show cooldown indicator */
+        .cooldown-active {
+            opacity: 1 !important;
+        }
+/* Timer Display */
+#timer-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-family: monospace;
+    color: #a7b6c7;
+    font-size: 18px;
+    z-index: 1000;
+    border: 1px solid rgba(167, 182, 199, 0.3);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+/* End Game Screen */
+#end-game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    flex-direction: column;
+    font-family: monospace;
+    overflow: auto;
+    padding: 20px;
+}
+
+#end-game-content {
+    background: rgba(26, 38, 57, 0.9);
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 80%;
+    text-align: center;
+    border: 1px solid rgba(167, 182, 199, 0.5);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+#ending-title {
+    font-size: 24px;
+    color: #fff;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(167, 182, 199, 0.7);
+}
+
+#ending-message {
+    font-size: 16px;
+    color: #a7b6c7;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    white-space: pre-wrap;
+    text-align: left;
+}
+
+#restart-button {
+    background: rgba(60, 90, 120, 0.7);
+    border: none;
+    color: #a7b6c7;
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: monospace;
+    transition: all 0.3s;
+    border: 1px solid rgba(167, 182, 199, 0.3);
+}
+
+#restart-button:hover {
+    background: rgba(80, 120, 160, 0.9);
+    transform: scale(1.05);
+}
+
+.ending-ascii-art {
+    margin: 20px 0;
+    color: #a7b6c7;
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: pre;
+}
+
+/* Collection counter for debugging */
+#collection-counter {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-family: monospace;
+    color: #a7b6c7;
+    font-size: 12px;
+    z-index: 1000;
+    display: none; /* Hidden by default, can be shown for debugging */
+}
+    </style>
+
+
+<style>
+    
+.ufo {
+    position: absolute;
+    top: 5vh;
+    left: 0;
+    width: 128px;
+    height: 128px;
+    background-image: url('https://cdn.glitch.global/9b9abd46-ae9c-4206-81ff-05f9117caf41/catalien.png?v=1745397274802');
+    background-size: contain;
+    background-repeat: no-repeat;
+    z-index: 300;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+
+.beam {
+    position: absolute;
+    top: calc(5vh + 74px); /* 位置在UFO正下方 */
+    width: 240px; /* 宽光柱 */
+    height: 70vh;
+    /* 上深下浅的渐变色 */
+    background: linear-gradient(
+        to bottom,
+        rgba(150, 220, 255, 0.3) 0%,
+        rgba(180, 230, 255, 0.25) 20%,
+        rgba(200, 240, 255, 0.2) 40%,
+        rgba(220, 245, 255, 0.15) 60%,
+        rgba(230, 250, 255, 0.1) 80%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    clip-path: polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%);
+    z-index: 299;
+    pointer-events: none;
+    filter: blur(3px);
+    /* 添加微弱的发光效果 */
+    box-shadow: 0 0 15px rgba(150, 220, 255, 0.1);
+}
+</style>
+
+
+</head>
+<body>
+<div id="game-container">
+<div id="horizon"></div>
+<div id="ocean">
+<div class="water-particles" id="water-particles"></div>
+</div>
+<div id="instructions">Left Click for Waves | Right Click and Hold for Bubbles</div>
+<pre id="ascii-morph-container"></pre>
+<div class="morph-cooldown" id="morph-cooldown"></div>
+<div id="timer-container">TIME: 3:00</div>
+<div id="collection-counter">
+  红色: 0 | 绿色: 0 | 蓝色: 0
+</div>
+
+<!-- End game screen -->
+<div id="end-game-container">
+  <div id="end-game-content">
+    <div id="ending-title"></div>
+    <div class="ending-ascii-art" id="ending-ascii-art"></div>
+    <div id="ending-message"></div>
+    <button id="restart-button">REPLAY</button>
+  </div>
+</div>
+</div>
+<script>
+    
+document.addEventListener('DOMContentLoaded', function() {
+
+    // 添加背景音乐
+    const audioElement = document.createElement('audio');
+    audioElement.id = 'background-music';
+    // 设置音频源
+    audioElement.src = 'https://cdn.glitch.global/9b9abd46-ae9c-4206-81ff-05f9117caf41/tam-g20loop.ogg?v=1745396377903';
+    // 设置循环播放
+    audioElement.loop = true;
+    // 设置音量（0.0到1.0之间）
+    audioElement.volume = 0.5; // 50%音量，可以调整
+    // 将音频设为预加载
+    audioElement.preload = 'auto';
+    // 将音频元素添加到页面
+    document.body.appendChild(audioElement);
+
+    // 尝试自动播放
+    const playPromise = audioElement.play();
+
+    // 处理可能的错误（比如浏览器阻止自动播放）
+    if (playPromise !== undefined) {
+        playPromise.catch(error => {
+            // 如果自动播放被阻止，我们可以在用户首次点击时播放
+            console.log('Auto-play was prevented. Will play on user interaction.');
+        
+            // 添加一次性点击事件监听器来开始播放
+            document.addEventListener('click', function startAudio() {
+                audioElement.play();
+                // 移除监听器，这样只会执行一次
+                document.removeEventListener('click', startAudio);
+            }, { once: true });
+        });
+    }
+
+    // 创建音频控制按钮
+    const audioControl = document.createElement('button');
+    audioControl.textContent = '🔊'; // 音量图标
+    audioControl.style.position = 'fixed';
+    audioControl.style.bottom = '50px';
+    audioControl.style.left = '10px';
+    audioControl.style.background = 'rgba(60, 90, 120, 0.7)';
+    audioControl.style.border = '1px solid rgba(167, 182, 199, 0.3)';
+    audioControl.style.borderRadius = '5px';
+    audioControl.style.color = '#a7b6c7';
+    audioControl.style.padding = '5px 10px';
+    audioControl.style.cursor = 'pointer';
+    audioControl.style.zIndex = '1000';
+
+    // 音频状态
+    let audioMuted = false;
+
+    // 切换音频状态
+    audioControl.addEventListener('click', function() {
+        if (audioMuted) {
+            audioElement.volume = 0.5;
+            audioControl.textContent = '🔊';
+            audioMuted = false;
+        } else {
+            audioElement.volume = 0;
+            audioControl.textContent = '🔇';
+            audioMuted = true;
+        }
+    });
+
+    // 添加到页面
+    document.body.appendChild(audioControl);
+
+    // 修改: 添加游戏计时器变量
+    let gameStarted = false;
+    let timeLeft = 180; // 3分钟 = 180秒
+    let timerInterval = null;
+    const timerContainer = document.getElementById('timer-container');
+    
+    // 启动计时器函数
+    function startTimer() {
+    if (gameStarted) return; // 如果已经开始了，就不重复启动
+    
+    gameStarted = true;
+    timerInterval = setInterval(function() {
+        timeLeft--;
+        
+        // 更新计时器显示
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerContainer.textContent = `TIME: ${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+        
+        // 时间到时结束游戏
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            endGame();
+        }
+    }, 1000);
+    
+    // 15秒后触发UFO（仅在游戏开始后）
+    setTimeout(function() {
+        summonUFO();
+    }, 15000);
+}
+    
+    // 找到endGame函数并替换为以下代码
+    function endGame() {
+        const endGameContainer = document.getElementById('end-game-container');
+        const endingTitle = document.getElementById('ending-title');
+        const endingMessage = document.getElementById('ending-message');
+        const endingAsciiArt = document.getElementById('ending-ascii-art');
+    
+        // 决定结局类型
+        let endingType = "neutral";
+    
+        // 如果一个都没收集到，则为中立结局
+        if (collectedAsciiColors.total === 0) {
+            endingType = "neutral";
+        } 
+        // 否则查看哪种颜色最多
+        else {
+            const maxColor = Math.max(
+                collectedAsciiColors.red, 
+                collectedAsciiColors.green, 
+                collectedAsciiColors.blue
+            );
+        
+            if (maxColor === collectedAsciiColors.red) {
+                endingType = "red";
+            } else if (maxColor === collectedAsciiColors.green) {
+                endingType = "green";
+            } else if (maxColor === collectedAsciiColors.blue) {
+                endingType = "blue";
+            }
+        }
+    
+        // 根据结局类型设置内容
+        switch(endingType) {
+            case "red":
+                endingTitle.textContent = "Archaeological Report: DATA HISTORY";
+                endingMessage.textContent = "After extensive analysis, we have concluded that Earth was never a biological civilization but rather an intergalactic USB storage facility.\n" +
+                "The surviving structures display modular, grid-like patterns with dense data inscriptions, indicating that these were not cities, but information storage hubs. There is no evidence that Earth inhabitants interacted physically. Instead, they seem to have converted their entire history into code archives, stored in what we now classify as “CODE VAULTS.\n" +
+                "\n" +
+                "Strangely, Earth’s final recorded data entry is a repeated system error message: \n" +
+                "\n" +
+                " * No Storage Space Left. Please Delete Files to Continue.\n" +
+                "\n" +
+                "There is no evidence that they resolved this issue before their collapse. Our AI model suggests Earth’s civilization ultimately crashed due to a critical memory overflow and was lost forever.";
+                endingAsciiArt.textContent = 
+                    "    ,    \n" +
+                    "   ,,    \n" +
+                    "   ,,,   \n" +
+                    "   ,,,   \n" +
+                    "   ,,,   \n" +
+                    "  ,,,,,  \n" +
+                    "  ,,,,,  \n" +
+                    " ,,,,,,, \n" +
+                    " ,,,,,,, \n" +
+                    ",,,,,,,,,\n" +
+                    " ^^^^^^^";
+                endingAsciiArt.style.color = "rgba(255, 120, 120, 0.9)";
+                break;
+            
+            case "green":
+                endingTitle.textContent = "Archaeological Report: BIG BATH";
+                endingMessage.textContent = "Recent evidence suggests that Earth was not a traditional civilization but rather a planetary-scale wellness retreat. Surviving structures indicate that Earth’s inhabitants lived in Floating Pool sanctuaries, where they engaged in daily thermal baths and spiritual relaxation rituals. Their belief system appears to have been centered around the perfect state of flotation, suggesting a philosophy where absolute relaxation was considered the ultimate enlightenment.\n" +
+                "\n" +
+                "There is no evidence of war or conflict. Instead, social hierarchy was determined by MASSAGE CODE, a classification system based on the depth and frequency of massages received. The ultimate cause of extinction is linked to a phenomenon known as “BIG BATH”. While initial theories suggest a global flooding event, textual analysis implies that Earth’s civilization may have simply dissolved into a state of pure relaxation and ceased to exist.\n" +
+                "\n" +
+                "There is no evidence that they ever experienced stress.";
+                endingAsciiArt.textContent = 
+                    "    _    \n" +
+                    "   / \\   \n" +
+                    "  /   \\  \n" +
+                    " /     \\ \n" +
+                    "/       \\\n" +
+                    "----+----\n" +
+                    "    |    \n" +
+                    "    |    \n" +
+                    "    |    \n" +
+                    "   /|\\   \n" +
+                    "  / | \\  ";
+                endingAsciiArt.style.color = "rgba(120, 255, 120, 0.9)";
+                break;
+            
+            case "blue":
+                endingTitle.textContent = "Archaeological Report: CLOWNY EMPIRE";
+                endingMessage.textContent = "The dominant rulers of Earth appear to have been known as “CLOWNY”—a social class characterized by exaggerated facial expressions, bright-colored outfits, and large red noses.\n" +
+                "There is no evidence that they governed through violence. Instead, their leadership system seems to have relied on ritualized comedic performances and competitive slipping contests. Earth’s religious system was centered around PRIMADONNAS (opera singers), suggesting a belief structure that required high-pitched vocal performances as expressions of faith.\n" +
+                "\n" +
+                "Strangely, Earth’s technological development was focused almost entirely on logistics and delivery services, suggesting that fast delivery was the primary metric of progress.\n" +
+                "\n" +
+                "Finally, Earth’s downfall appears to be tied to an event known as “BIG MAC”, which our AI correlates to extreme consumerism-induced tectonic collapse. There is no evidence that they foresaw their own extinction, but final records indicate they were still waiting in line for food in their last moments.";
+                endingAsciiArt.textContent = 
+                    "   ~~~~~   \n" +
+                    " ~~~~~~~~~~ \n" +
+                    "~~~~~~~~~~~~\n" +
+                    "  \\       / \n" +
+                    "   \\  o  /  \n" +
+                    "    \\   /   \n" +
+                    "     \\ /    \n" +
+                    "      V     \n" +
+                    "     / \\    \n" +
+                    "    /   \\   \n" +
+                    "   /     \\  ";
+                endingAsciiArt.style.color = "rgba(120, 120, 255, 0.9)";
+                break;
+            
+            default: // neutral
+                endingTitle.textContent = "Archaeological Report: EXO-ERROR-999";
+                endingMessage.textContent = 
+                    "The research team attempted to analyze Earth’s historical data, yet we found no evidence to rejcect the Null Hypothesis.\n" +
+                    "\n" +
+                    " * No evidence suggests that this civilization followed any logical patterns. No evidence suggests that they underwent a normal societal evolution.\n" +
+                    " * No evidence suggests that we should continue our research.\n" +
+                    " * The archaeological study has been terminated.\n" +
+                    "\n" +
+                    "Final Conclusion: Earth may have never existed at all.";
+                endingAsciiArt.textContent = 
+                    "   _,-=._              /|_/|   \n" +
+                    "  /=^_^-+\\           (/o o\\)   \n" +
+                    "  \\~\\_.-./            > ^ <    \n" +
+                    "   /   \\               /~\\     \n" +
+                    "  //|.\\\\\\             //|.\\\\   \n" +
+                    " ||,|Y| \\           |Y,|Y|     \n" +
+                    " \\\\ |.|/             \\|.|/     \n" +
+                    "  \\/\"/                \"/\"      \n";
+                endingAsciiArt.style.color = "rgba(167, 182, 199, 0.9)";
+                break;
+        }
+    
+        // 显示结束屏幕
+        endGameContainer.style.display = 'flex';
+    
+        // 添加在这里：停止UFO移动并移除UFO元素
+        if (window.ufoInterval) {
+            clearInterval(window.ufoInterval);
+            window.ufoInterval = null;
+        }
+        document.querySelectorAll('.ufo, .beam').forEach(el => el.remove());
+    }
+     
+    // 在这里添加重启按钮事件处理
+    document.getElementById('restart-button').addEventListener('click', function() {
+        // 重置游戏状态
+        gameStarted = false;
+        timeLeft = 180;
+        timerContainer.textContent = "TIME: 3:00";
+        
+        // 重置收集计数器
+        collectedAsciiColors = {red: 0, green: 0, blue: 0, total: 0};
+        updateCollectionCounter();
+        
+        // 隐藏结束屏幕
+        document.getElementById('end-game-container').style.display = 'none';
+        
+        // 清除所有ASCII艺术和字符
+        document.querySelectorAll('.ascii-art-container, .character-fish').forEach(el => el.remove());
+        
+        // 重新创建初始字符
+        createInitialCharacters();
+    });
+    
+    // 修改: 为鼠标事件添加计时器启动功能
+    document.addEventListener('mousedown', function(e) {
+        // 启动计时器（仅在第一次点击时启动）
+        startTimer();
+    
+        if (e.button === 2) startBubbleFlood(e.clientX);
+        // 移除了这里的summonUFO()调用
+    });
+    document.addEventListener('mouseup', function(e) {
+        if (e.button === 2) stopBubbleFlood();
+    });
+
+            const gameContainer = document.getElementById('game-container');
+            const ocean = document.getElementById('ocean');
+            const particlesContainer = document.getElementById('water-particles');
+            const asciiMorphContainer = document.getElementById('ascii-morph-container');
+            const cooldownIndicator = document.getElementById('morph-cooldown');
+            
+            // Track character bursts for ASCII art formation
+            let recentBursts = [];
+            // 在全局变量区域添加
+let collectedAsciiColors = {
+  red: 0,    // 红色（索引0）
+  green: 0,  // 绿色（索引1）
+  blue: 0,   // 蓝色（索引2）
+  total: 0   // 总数
+};
+            // Track active ASCII art instances
+            let activeAsciiArts = [];
+            
+            // Characters to use for character "fish"
+            const chars = '+*/\\~#@$%&!?><*+=-{};:.^▚▙▟▌▖▀▝▞▗▐▎';
+            
+            // Cooldown management
+            const cooldownManager = {
+                lastUsedTime: {
+                    waveEffect: 0,
+                    glowEffect: 0,
+                    asciiMorph: 0
+                },
+                
+                cooldownDuration: {
+                    waveEffect: 300, // Reduced for better responsiveness
+                    glowEffect: 600, // Reduced for better responsiveness
+                    asciiMorph: 3000 // Reduced to 3 seconds cooldown for better game flow
+                },
+                
+                canUseSkill: function(skillName) {
+                    const now = Date.now();
+                    const lastUsed = this.lastUsedTime[skillName] || 0;
+                    const cooldown = this.cooldownDuration[skillName] || 0;
+                    
+                    return (now - lastUsed) >= cooldown;
+                },
+                
+                useSkill: function(skillName) {
+                    this.lastUsedTime[skillName] = Date.now();
+                    
+                    // Show cooldown indicator if it's the ASCII morph
+                    if (skillName === 'asciiMorph') {
+                        cooldownIndicator.textContent = 'ASCII Morph Cooldown: ' + 
+                            (this.cooldownDuration.asciiMorph / 1000) + 's';
+                        cooldownIndicator.classList.add('cooldown-active');
+                        
+                        setTimeout(() => {
+                            cooldownIndicator.classList.remove('cooldown-active');
+                        }, this.cooldownDuration.asciiMorph);
+                    }
+                },
+                
+                getRemainingCooldown: function(skillName) {
+                    const now = Date.now();
+                    const lastUsed = this.lastUsedTime[skillName] || 0;
+                    const cooldown = this.cooldownDuration[skillName] || 0;
+                    return Math.max(0, cooldown - (now - lastUsed));
+                }
+            };
+            
+            // ASCII art patterns - exactly 12 patterns
+const asciiPatterns = [
+    // Fish
+    [
+        "              ,",
+        "             /|      __",
+        "            / |   ,-~ /",
+        "           Y :|  //  /",
+        "           | jj /( .^",
+        "           >-\"~\"-v\"",
+        "          /       Y",
+        "         jo  o    |",
+        "        ( ~T~     j",
+        "         >._-' _./",
+        "        /   \"~\"  |",
+        "       Y     _,  |",
+        "      /| ;-\"~ _  l",
+        "     / l/ ,-\"~    \\",
+        "     \\//\\/      .- \\",
+        "      Y        /    Y",
+        "      l       I     !",
+        "      ]\\      _\\    /\"\\",
+        "     (\" ~----( ~   Y.  )"
+    ],
+    // Turtle
+    [
+        "     \\`.     ___",
+        "      \\ \\   / __>0",
+        "  /\\  /  |/' / ",
+        " /  \\/   `  ,`'--.",
+        "/ /(___________)_ \\",
+        "|/ //.-.   .-.\\\\ \\ \\",
+        "0 // :@ ___ @: \\\\ \\/",
+        "  ( o ^(___)^ o ) 0",
+        "   \\ \\_______/ /",
+        "/\\   '._______.'--.",
+        "\\ /|  |<_____>    |",
+        " \\ \\__|<_____>____/|__",
+        "  \\____<_____>_______/"
+    ],
+    // Small Jellyfish
+    [
+        "  ,=\"   \"=.",
+        " /  6 6  \\",
+        "(    7    )",
+        " \\  '--'  /",
+        "  \\=...=/",
+        " /       \\",
+        "(         )",
+        " \\_______/",
+        "(           )",
+        "'.______.'"
+    ],
+    // Octopus Head
+    [
+        "    _____     ",
+        "  .'     '.   ",
+        " /  o   o  \\  ",
+        "|           | ",
+        "|  \\     /  | ",
+        " \\  '---'  /  ",
+        "  '._____.'   "
+    ],
+    // Squid
+    [
+        "        ____",
+        "       o8%8888,",
+        "     o88%8888888.",
+        "    8'-    -:8888b",
+        "   8'         8888",
+        "  d8.-=. ,==-.:888b",
+        "  >8 `~` :`~' d8888",
+        "  88         ,88888",
+        "  88b. `-~  ':88888",
+        "  888b ~==~ .:88888",
+        "  88888o--:':::8888",
+        "  `88888| :::' 8888b",
+        "  8888^^'       8888b"
+    ],
+    // School of Fish
+    [
+        "     _      _      _",
+        "  __(.)< __(.)> __(.)=",
+        "  \\___)  \\___)  \\___)  ",
+        "         _      _      _",
+        "      __(.)< __(.)> __(.)=",
+        "      \\___)  \\___)  \\___)   ",
+        "     _      _      _",
+        "  __(.)< __(.)> __(.)=",
+        "  \\___)  \\___)  \\___)   "
+    ],
+    // Buddha
+    [
+        "                _ooOoo_",
+        "               o8888888o",
+        "               88\" . \"88",
+        "               (| -_- |)",
+        "               O\\  =  /O",
+        "            ____/`---'\\____",
+        "          .'  \\\\|     |//  `.",
+        "         /  \\\\|||  :  |||//  \\",
+        "        /  _||||| -:- |||||_  \\",
+        "        |   | \\\\\\  -  /'| |   |",
+        "        | \\_|  `\\`---'//  |_/ |",
+        "        \\  .-\\__ `-. -'__/-.  /"
+    ],
+    // Sailboat
+    [
+        "                             /",
+        "                            /",
+        "                           /;",
+        "                          //",
+        "                         ;/",
+        "                       ,//",
+        "                   _,-' ;_,,",
+        "                _,'-_  ;|,'",
+        "            _,-'_,..--. |",
+        "    ___   .'-'_)'  ) _)\\|      ___",
+        "  ,'\"\"\"`'' _  )   ) _)  ''--'''_,-'",
+        "-={-o-  /|    )  _)  ) ; '_,--''"
+    ],
+    // Lighthouse/Tower
+    [
+        "     .--------.",
+        "    / .------. \\",
+        "   / /        \\ \\",
+        "   | |        | |",
+        "  _| |________| |_",
+        ".' |_|        |_| '.",
+        "'._____ ____ _____.'",
+        "|     .'____'.     |",
+        "'.__.'.'    '.'.__.'",
+        "'.__  |      |  __.'",
+        "|   '.'.____.'.'   |",
+        "'.____'.____.'____.'",
+        "'.________________.'"
+    ],
+    // Crab
+    [
+        "   __     __",
+        "  /  \\~~~~/  \\",
+        " (    ..     )_",
+        "  \\         /  \\",
+        "   \\_______/    \\",
+        "   (  0   0  )   \\",
+        "  ==\\  <Y>  /     \\",
+        "    )=====>(      )",
+        "   /       \\     /",
+        "  /         \\   /",
+        " /           \\ /",
+        "(             )",
+        "(             )"
+    ],
+    // Seashell
+    [
+        "   _.-''|''-._",
+        " .'  |      |  '.",
+        "/    |      |    \\",
+        "|    |      |    |",
+        "|    |______|    |",
+        "|  /''      '\\  |",
+        "| |            | |",
+        " \\|            |/",
+        "  '-------------'"
+    ],
+    // Whale
+    [
+        "       .-------------.",
+        "      /               \\",
+        "     /  .-------.   ,  \\",
+        "    |   |       |  /|   |",
+        "    |   |       | / |   |",
+        "     \\  '-------'   /   /",
+        "      \\___________/   /",
+        "    ___/           \\___",
+        "   /   \\___________/   \\",
+        "  /                     \\",
+        " /_______________________\\"
+    ]
+];
+            
+           // Implement the AsciiMorph library
+const AsciiMorph = (function() {
+    'use strict';
+    
+    let element = null;
+    let canvasDimensions = {};
+    let renderedData = [];
+    let framesToAnimate = [];
+    let myTimeout = null;
+    
+    // Utils
+    function extend(target, source) {
+        for (let key in source) {
+            if (!(key in target)) {
+                target[key] = source[key];              
+            }
+        }
+        return target;
+    }
+    
+    function repeat(pattern, count) {
+        if (count < 1) return '';
+        let result = '';
+        while (count > 1) {
+            if (count & 1) result += pattern;
+            count >>= 1, pattern += pattern;
+        }
+        return result + pattern;
+    }
+    
+    function replaceAt(string, index, character) {
+        return string.substr(0, index) + character + string.substr(index+character.length);
+    }
+    
+    // Initialize
+    function init(el, canvasSize) {
+        element = el;
+        canvasDimensions = canvasSize;
+    }
+    
+    // Square out data
+    function squareOutData(data) {
+        let i;
+        let renderDimensions = {
+            x: 0,
+            y: data.length
+        };
+
+        // Calculate centering numbers
+        for (i = 0; i < data.length; i++) {
+            if (data[i].length > renderDimensions.x) {
+                renderDimensions.x = data[i].length;
+            }
+        }
+        
+        // Pad out right side of data to square it out
+        for (i = 0; i < data.length; i++) {
+            if (data[i].length < renderDimensions.x) {
+                data[i] = (data[i] + repeat(' ', renderDimensions.x - data[i].length));
+            }
+        }
+        
+        let paddings = {
+            x: Math.floor((canvasDimensions.x - renderDimensions.x) / 2),
+            y: Math.floor((canvasDimensions.y - renderDimensions.y) / 2)
+        };
+        
+        // Left Padding
+        for (let i = 0; i < data.length; i++) {
+            data[i] = repeat(' ', paddings.x) + data[i] + repeat(' ', paddings.x);
+        }
+        
+        // Pad out the rest of everything
+        for (let i = 0; i < canvasDimensions.y; i++) {
+            if (i < paddings.y) {
+                data.unshift(repeat(' ', canvasDimensions.x));
+            } else if (i > (paddings.y + renderDimensions.y)) {
+                data.push(repeat(' ', canvasDimensions.x));
+            }
+        }
+        
+        return data;
+    }
+    
+    // Crushes the frame data by 1 unit
+    function getMorphedFrame(data) {
+        let firstInLine, lastInLine = null;
+        let found = false;
+        
+        for (let i = 0; i < data.length; i++) {
+            let line = data[i];
+            firstInLine = line.search(/\S/);
+            
+            if (firstInLine === -1) {
+                firstInLine = null;
+            }
+            
+            for (let j = 0; j < line.length; j++) {
+                if (line[j] != ' ') {
+                    lastInLine = j;
+                }
+            }
+            
+            if (firstInLine !== null && lastInLine !== null) {
+                data = crushLine(data, i, firstInLine, lastInLine);
+                found = true;
+            }
+            
+            firstInLine = null;
+            lastInLine = null;
+        }
+        
+        if (found) {
+            return data;
+        } else {
+            return false;
+        }
+    }
+    
+    // Crush line for morph animation
+    function crushLine(data, line, start, end) {
+        let centers = {
+            x: Math.floor(canvasDimensions.x / 2),
+            y: Math.floor(canvasDimensions.y / 2)
+        };
+        
+        let crushDirection = 1;
+        if (line > centers.y) {
+            crushDirection = -1;
+        }
+        
+        let charA = data[line][start];
+        let charB = data[line][end];
+        
+        data[line] = replaceAt(data[line], start, " ");
+        data[line] = replaceAt(data[line], end, " ");
+
+        if (!((end - 1) == (start + 1)) && !(start === end) && !((start + 1) === end)) {
+            data[line + crushDirection] = replaceAt(data[line + crushDirection], (start + 1), chars.charAt(Math.floor(Math.random() * chars.length)));
+            data[line + crushDirection] = replaceAt(data[line + crushDirection], (end - 1), chars.charAt(Math.floor(Math.random() * chars.length)));
+        } else if ((((start === end) || (start + 1) === end)) && ((line + 1) !== centers.y && (line - 1) !== centers.y && line !== centers.y)) {
+            data[line + crushDirection] = replaceAt(data[line + crushDirection], start, chars.charAt(Math.floor(Math.random() * chars.length)));
+            data[line + crushDirection] = replaceAt(data[line + crushDirection], end, chars.charAt(Math.floor(Math.random() * chars.length)));
+        }
+        
+        return data;
+    }
+    
+    // Render original data
+    function render(data) {
+        let ourData = squareOutData(data.slice());
+        renderSquareData(ourData);
+    }
+    
+    // Render square data
+    function renderSquareData(data) {
+        element.innerHTML = '';
+        for (let i = 0; i < data.length; i++) {
+            element.innerHTML = element.innerHTML + data[i] + '\n';
+        }
+        
+        renderedData = data;
+    }
+    
+    // Morph between current and new frame
+    function morph(data) {
+        clearTimeout(myTimeout);
+        let frameData = prepareFrames(data.slice());
+        animateFrames(frameData);
+    }
+    
+    // Prepare frames for morphing
+    function prepareFrames(data) {
+        let deconstructionFrames = [];
+        let constructionFrames = [];
+        let clonedData = renderedData.slice(0);
+        
+        // Get deconstruction frames
+        for (let i = 0; i < 100; i++) {
+            let newData = getMorphedFrame(clonedData);
+            if (newData === false) {
+                break;
+            }
+            deconstructionFrames.push(newData.slice(0));
+            clonedData = newData;
+        }
+        
+        // Get construction frames
+        let squareData = squareOutData(data);
+        constructionFrames.unshift(squareData.slice(0));
+        
+        for (let i = 0; i < 100; i++) {
+            let newData = getMorphedFrame(squareData);
+            if (newData === false) {
+                break;
+            }
+            constructionFrames.unshift(newData.slice(0));
+            squareData = newData;
+        }
+        
+        return deconstructionFrames.concat(constructionFrames);
+    }
+    
+    // Animate frames
+    function animateFrames(frameData) {
+        framesToAnimate = frameData;
+        animateFrame();
+    }
+    
+    // Animate individual frame
+    function animateFrame() {
+        myTimeout = setTimeout(function() {
+            renderSquareData(framesToAnimate[0]);
+            framesToAnimate.shift();
+            
+            if (framesToAnimate.length > 0) {
+                animateFrame();
+            }
+        }, 20);
+    }
+    
+    // Main function
+    function main(element, canvasSize) {
+        if (!element || !canvasSize) {
+            console.log("sorry, I need an element and a canvas size");
+            return;   
+        }
+        
+        init(element, canvasSize);
+    }
+    
+    return extend(main, {
+        render: render,
+        morph: morph
+    });
+})();
+
+// Initialize AsciiMorph with the container
+AsciiMorph(asciiMorphContainer, { x: 51, y: 28 });
+
+// Create water particles
+createWaterParticles();
+
+// Set up click events
+gameContainer.addEventListener('click', function(e) {
+    // 修改：添加计时器启动
+    startTimer();
+    
+    if (!cooldownManager.canUseSkill('waveEffect')) {
+        return;
+    }
+    
+    cooldownManager.useSkill('waveEffect');
+    const rect = ocean.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    createPixelWave(offsetX, offsetY);
+    
+    // Create character burst after wave
+    setTimeout(() => {
+        createCharacterBurst(e.clientX, e.clientY - 40);
+        pushNearbyCharacters(e.clientX, e.clientY);
+    }, 100);
+});
+
+// Right-click glow effect
+gameContainer.addEventListener('contextmenu', function(e) {
+    e.preventDefault(); // Prevent default context menu
+    
+    // 修改：添加计时器启动
+    startTimer();
+    
+    if (!cooldownManager.canUseSkill('glowEffect')) {
+        return;
+    }
+    
+    cooldownManager.useSkill('glowEffect');
+    const rect2 = ocean.getBoundingClientRect();
+    const offsetX2 = e.clientX - rect2.left;
+    const offsetY2 = e.clientY - rect2.top;
+    createGlowEffect(offsetX2, offsetY2);
+});
+
+// Create water particles
+function createWaterParticles() {
+    for (let i = 0; i < 40; i++) {
+        const particle = document.createElement('div');
+        particle.classList.add('particle');
+        
+        // Random size
+        const size = 2 + Math.random() * 4;
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        
+        // Random position
+        const posX = Math.random() * 100;
+        const posY = Math.random() * 85;
+        particle.style.left = posX + '%';
+        particle.style.top = posY + '%';
+        
+        // Random opacity
+        particle.style.opacity = 0.1 + Math.random() * 0.3;
+        
+        particlesContainer.appendChild(particle);
+        
+        // Animate particle
+        animateWaterParticle(particle);
+    }
+}
+
+// Animate water particle
+function animateWaterParticle(particle) {
+    // Current position
+    let posX = parseFloat(particle.style.left);
+    let posY = parseFloat(particle.style.top);
+    
+    // Random movement
+    const moveX = (Math.random() - 0.5) * 0.05;
+    const moveY = (Math.random() - 0.5) * 0.02 - 0.01; // Slight upward bias
+    
+    function updatePosition() {
+        // Update position
+        posX += moveX;
+        posY += moveY;
+        
+        // Check boundaries
+        if (posX < 0) posX = 100;
+        if (posX > 100) posX = 0;
+        if (posY < 0) posY = 85;
+        if (posY > 85) posY = 0;
+        
+        // Apply position
+        particle.style.left = posX + '%';
+        particle.style.top = posY + '%';
+        
+        // Continue animation
+        requestAnimationFrame(updatePosition);
+    }
+    
+    // Start animation
+    requestAnimationFrame(updatePosition);
+}
+
+// Create pixel wave effect for left click
+function createPixelWave(x, y) {
+    // Wave container
+    const waveContainer = document.createElement('div');
+    waveContainer.style.position = 'absolute';
+    waveContainer.style.left = (x - 60) + 'px';
+    waveContainer.style.top = (y - 30) + 'px';
+    waveContainer.style.width = '120px';
+    waveContainer.style.height = '70px';
+    waveContainer.style.pointerEvents = 'none';
+    waveContainer.style.zIndex = '50';
+    ocean.appendChild(waveContainer);
+    
+    // Wave colors - more dark and muted for post-apocalyptic mood
+    const waveColors = [
+        'rgba(180, 195, 210, 0.95)', // Light foam
+        'rgba(150, 175, 195, 0.9)',  // Light blue
+        'rgba(120, 150, 180, 0.85)', // Medium light blue
+        'rgba(90, 125, 160, 0.8)',   // Medium blue
+        'rgba(60, 95, 135, 0.75)',   // Deep blue
+        'rgba(40, 70, 110, 0.7)'     // Darkest blue
+    ];
+    
+    // Pixel size
+    const pixelSize = 4;
+    
+    // Wave matrix pattern
+    const waveMatrix = [
+        [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+        [0,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,0,0,0,0,0,1,1,0,0,0,1,1,1,0],
+        [0,0,0,0,0,1,1,2,1,1,1,2,2,2,1,0,0,0,0,1,1,2,1,1,1,1,2,2,1,1],
+        [0,0,0,1,1,2,2,2,2,2,2,2,2,2,2,1,0,0,1,2,2,2,2,2,2,2,2,2,2,1],
+        [0,0,1,2,2,3,3,3,3,3,3,3,3,3,2,2,1,1,2,3,3,3,3,3,3,3,3,3,2,2],
+        [0,1,2,3,3,3,4,4,4,3,3,3,3,3,3,2,2,2,3,4,4,4,4,3,3,3,3,3,3,2],
+        [1,2,3,4,4,4,4,4,4,4,4,4,4,4,3,3,3,3,4,4,5,4,4,4,4,4,4,4,3,3],
+        [2,3,4,5,5,5,5,5,5,5,5,5,4,4,4,4,4,4,5,5,5,5,5,5,5,5,4,4,4,3],
+        [3,4,5,5,6,6,6,6,6,6,6,5,5,5,5,5,5,5,6,6,6,6,6,6,6,5,5,5,5,4],
+        [4,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,5,5],
+        [5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,5],
+        [6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6]
+    ];
+    
+    // Create pixels by wave matrix
+    for (let y = 0; y < waveMatrix.length; y++) {
+        for (let x = 0; x < waveMatrix[y].length; x++) {
+            const colorIndex = waveMatrix[y][x];
+            if (colorIndex > 0) {
+                // Create pixel element
+                const pixel = document.createElement('div');
+                pixel.style.position = 'absolute';
+                pixel.style.width = pixelSize + 'px';
+                pixel.style.height = pixelSize + 'px';
+                pixel.style.backgroundColor = waveColors[colorIndex - 1];
+                
+                // Position
+                pixel.style.left = (x * pixelSize) + 'px';
+                pixel.style.top = (y * pixelSize) + 'px';
+                
+                // Add to container
+                waveContainer.appendChild(pixel);
+                
+                // Add animation
+                if (y < 4) {
+                    // Wave peak
+                    pixel.style.animation = `wavePeakFloat ${0.8 + Math.random() * 0.4}s ${x * 0.02}s cubic-bezier(0.25, 0.1, 0.25, 1) forwards`;
+                } else if (y < 8) {
+                    // Wave middle
+                    pixel.style.animation = `waveRipple ${0.7 + Math.random() * 0.3}s ${x * 0.02}s cubic-bezier(0.25, 0.1, 0.25, 1) forwards`;
+                } else {
+                    // Wave base
+                    pixel.style.animation = `waveBase ${0.6 + Math.random() * 0.3}s ${x * 0.02}s cubic-bezier(0.25, 0.1, 0.25, 1) forwards`;
+                }
+            }
+        }
+    }
+    
+    // Add splash droplets
+    for (let i = 0; i < 10; i++) {
+        setTimeout(() => {
+            const splash = document.createElement('div');
+            splash.style.position = 'absolute';
+            
+            // Droplet size
+            const dropSize = 1 + Math.random() * 2;
+            splash.style.width = dropSize + 'px';
+            splash.style.height = dropSize + 'px';
+            
+            // Droplet color
+            const colorIdx = Math.floor(Math.random() * 2);
+            splash.style.backgroundColor = waveColors[colorIdx];
+            splash.style.borderRadius = '50%';
+            
+            // Droplet position
+            const startX = 30 + Math.random() * 60;
+            const startY = Math.random() * 10;
+            splash.style.left = startX + 'px';
+            splash.style.top = startY + 'px';
+            
+            // Animation
+            splash.style.animation = `waveSplash ${0.5 + Math.random() * 0.5}s ease-out forwards`;
+            
+            waveContainer.appendChild(splash);
+        }, i * 40);
+    }
+    
+    // Cleanup
+    setTimeout(() => {
+        waveContainer.remove();
+    }, 2000);
+}
+
+// Create ripple effect for right click
+function createGlowEffect(x, y) {
+    // Create multiple ripple circles
+    for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+            // Create ripple element
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple-effect';
+            
+            // Size slightly different for each circle
+            const size = 80 + (i * 40);
+            ripple.style.width = size + 'px';
+            ripple.style.height = size + 'px';
+            
+            // Center at click position
+            ripple.style.left = (x - size/2) + 'px';
+            ripple.style.top = (y - size/2) + 'px';
+            
+            // Add to ocean
+            ocean.appendChild(ripple);
+            
+            createRisingBubbles(x);
+
+            // Remove after animation
+            setTimeout(() => {
+                ripple.remove();
+            }, 1500);
+        }, i * 200); // Staggered timing for concentric ripples
+    }
+    
+    // Create character burst with different animation
+    setTimeout(() => {
+        createGlowCharacters(x, y);
+    }, 300);
+}
+// Create characters from ripple effect
+function createGlowCharacters(x, y) {
+    // Container for characters
+    const charContainer = document.createElement('div');
+    charContainer.className = 'character-burst-container';
+    charContainer.style.left = (x - 60) + 'px';
+    charContainer.style.top = (y - 60) + 'px';
+    charContainer.style.width = '120px';
+    charContainer.style.height = '120px';
+    ocean.appendChild(charContainer);
+    
+    // Create fewer characters for more subtle effect
+    const charCount = 8 + Math.floor(Math.random() * 7);
+    
+    for (let i = 0; i < charCount; i++) {
+        // Create character element
+        const charElem = document.createElement('div');
+        charElem.className = 'character-fish';
+        
+        // Random character
+        charElem.textContent = chars.charAt(Math.floor(Math.random() * chars.length));
+        
+        // Position in container
+        charElem.style.left = '60px';
+        charElem.style.top = '60px';
+        
+        // Style
+        charElem.style.fontSize = (10 + Math.floor(Math.random() * 6)) + 'px';
+        charElem.style.color = 'rgba(255, 255, 255, 0.9)';
+        charElem.style.textShadow = '0 0 5px rgba(255, 255, 255, 0.8)';
+        
+        // Add to container
+        charContainer.appendChild(charElem);
+        
+        // Add animation
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 20 + Math.random() * 30;
+        const delay = Math.random() * 0.3;
+        
+        charElem.style.animation = `charFromRipple 1s ${delay}s forwards`;
+        
+        // Final position
+        setTimeout(() => {
+            const finalX = 60 + Math.cos(angle) * distance;
+            const finalY = 60 + Math.sin(angle) * distance;
+            charElem.style.transform = `translate(${finalX - 60}px, ${finalY - 60}px) rotate(360deg)`;
+            
+            // Fade from white to blue
+            charElem.style.transition = 'color 1s, text-shadow 1s';
+            charElem.style.color = 'rgba(150, 200, 255, 0.8)';
+            charElem.style.textShadow = '0 0 5px rgba(100, 150, 255, 0.6)';
+            
+            // Animate after burst
+            setTimeout(() => {
+                animateCharacterFish(charElem);
+            }, 1000);
+        }, (delay + 1) * 1000);
+    }
+    
+    // Track for ASCII formation
+    trackCharacterBurst(x, y);
+}
+
+// Create character burst
+function createCharacterBurst(x, y) {
+    // Container
+    const burstContainer = document.createElement('div');
+    burstContainer.className = 'character-burst-container';
+    burstContainer.style.position = 'absolute';
+    burstContainer.style.left = (x - 60) + 'px';
+    burstContainer.style.top = (y - 60) + 'px';
+    burstContainer.style.width = '120px';
+    burstContainer.style.height = '120px';
+    ocean.appendChild(burstContainer);
+    
+    // Create characters
+    const charCount = 12 + Math.floor(Math.random() * 8);
+    
+    // Colors
+    const colors = [
+        'rgba(167, 182, 199, 0.9)',
+        'rgba(147, 162, 179, 0.9)',
+        'rgba(127, 142, 159, 0.9)',
+        'rgba(107, 122, 139, 0.9)',
+        'rgba(87, 102, 119, 0.9)'
+    ];
+    
+    for (let i = 0; i < charCount; i++) {
+        const charElem = document.createElement('div');
+        charElem.className = 'character-fish';
+        
+        // Random character
+        charElem.textContent = chars.charAt(Math.floor(Math.random() * chars.length));
+        
+        // Style
+        charElem.style.position = 'absolute';
+        charElem.style.fontSize = (12 + Math.floor(Math.random() * 6)) + 'px';
+        charElem.style.color = colors[Math.floor(Math.random() * colors.length)];
+        charElem.style.textShadow = '0 0 5px rgba(100, 150, 200, 0.5)';
+        
+        // Initial position
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * 10;
+        charElem.style.left = (60 + Math.cos(angle) * distance) + 'px';
+        charElem.style.top = (60 + Math.sin(angle) * distance) + 'px';
+        
+        // Add to container
+        burstContainer.appendChild(charElem);
+        
+        // Animate
+        animateCharacter(charElem, i);
+    }
+    
+    // Track for ASCII formation
+    trackCharacterBurst(x, y);
+    
+    return burstContainer;
+}
+
+// Track character bursts for ASCII art formation with significantly improved sensitivity
+function trackCharacterBurst(x, y) {
+    const timestamp = Date.now();
+    recentBursts.push({ x, y, timestamp });
+    
+    // Keep only recent bursts (last 5 seconds - shorter timeframe for better responsiveness)
+    recentBursts = recentBursts.filter(b => timestamp - b.timestamp < 5000);
+    
+    // Check for cluster formation - MUCH IMPROVED SENSITIVITY
+    checkForClusterFormation();
+    
+    // Visualize clicks with subtle glow to give feedback
+    createClickFeedback(x, y);
+}
+
+// Add visual feedback for clicks to improve user agency
+function createClickFeedback(x, y) {
+    const feedback = document.createElement('div');
+    feedback.style.position = 'absolute';
+    feedback.style.left = (x - 15) + 'px';
+    feedback.style.top = (y - 15) + 'px';
+    feedback.style.width = '30px';
+    feedback.style.height = '30px';
+    feedback.style.borderRadius = '50%';
+    feedback.style.background = 'radial-gradient(circle, rgba(167, 182, 199, 0.3) 0%, rgba(167, 182, 199, 0) 70%)';
+    feedback.style.zIndex = '40';
+    feedback.style.pointerEvents = 'none';
+    
+    // Animate
+    feedback.style.animation = 'rippleExpand 0.8s cubic-bezier(0.1, 0.5, 0.1, 1) forwards';
+    
+    // Add to ocean
+    ocean.appendChild(feedback);
+    
+    // Remove after animation
+    setTimeout(() => {
+        if (feedback.parentNode) {
+            feedback.parentNode.removeChild(feedback);
+        }
+    }, 800);
+}
+
+// Significantly improved cluster detection function
+function checkForClusterFormation() {
+    // Only check if ASCII morph is not on cooldown
+    if (!cooldownManager.canUseSkill('asciiMorph')) {
+        return;
+    }
+    
+    const timestamp = Date.now();
+    
+    // Create a heatmap of character density with smaller grid for better precision
+    const gridSize = 80; // Reduced grid size for better detection
+    const heatmap = {};
+    
+    // Fill the heatmap
+    for (let i = 0; i < recentBursts.length; i++) {
+        const burst = recentBursts[i];
+        
+        // Calculate grid position
+        const gridX = Math.floor(burst.x / gridSize);
+        const gridY = Math.floor(burst.y / gridSize);
+        
+        // Check cells in a 3x3 area to create smoother clusters
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const key = (gridX+dx) + ',' + (gridY+dy);
+                
+                // Distance from center affects weight
+                const cellWeight = (dx === 0 && dy === 0) ? 1 : 0.5;
+                
+                // Add to heatmap with time decay (newer bursts count more)
+                // Much stronger time weighting: recent clicks count much more
+                const age = (timestamp - burst.timestamp) / 5000; // 0 to 1, shorter timeframe
+                const weight = Math.max(0, 1 - age) * cellWeight; // Newer bursts have more weight
+                
+                if (!heatmap[key]) {
+                    heatmap[key] = { count: 0, x: 0, y: 0, recentClicks: 0 };
+                }
+                
+                heatmap[key].count += weight;
+                heatmap[key].x += burst.x * weight;
+                heatmap[key].y += burst.y * weight;
+                
+                // Count very recent clicks separately (last 2 seconds)
+                if (timestamp - burst.timestamp < 2000) {
+                    heatmap[key].recentClicks += 1;
+                }
+            }
+        }
+    }
+    
+   // Find the hottest spot with priority for recent activity
+let maxScore = 0;
+let hotspot = null;
+
+for (const key in heatmap) {
+    // Calculate score with priority to recent activity
+    const recentClickBonus = heatmap[key].recentClicks * 1.5; // Bonus for recent clicks
+    const score = heatmap[key].count + recentClickBonus;
+    
+    // Direct pattern detection: consecutive clicks in same area
+    const hasConsecutiveClicks = heatmap[key].recentClicks >= 3; // 3+ clicks in 2 seconds
+    
+    // If we detect consecutive clicks pattern, immediately trigger
+    if (hasConsecutiveClicks) {
+        hotspot = heatmap[key];
+        console.log("Consecutive clicks detected! Triggering ASCII art");
+        break;
+    }
+    
+    if (score > maxScore) {
+        maxScore = score;
+        hotspot = heatmap[key];
+    }
+}
+
+// Significantly reduced threshold and added patterns detection
+// If we have a dense enough cluster or pattern detected, trigger ASCII art
+if (hotspot && (maxScore > 4 || hotspot.recentClicks >= 3)) {
+    // Calculate the center of the hotspot
+    const centerX = hotspot.x / hotspot.count || 
+                   recentBursts[recentBursts.length-1].x; // Fallback to last click
+    const centerY = hotspot.y / hotspot.count || 
+                   recentBursts[recentBursts.length-1].y;
+    
+    console.log("Found cluster with score " + maxScore + " - triggering ASCII art");
+    triggerAsciiMorph(centerX, centerY);
+    
+    // Use cooldown skill
+    cooldownManager.useSkill('asciiMorph');
+    
+    // Clear recent bursts in this area to prevent immediate re-triggering
+    const clearRadius = 100;
+    recentBursts = recentBursts.filter(burst => {
+        const dx = burst.x - centerX;
+        const dy = burst.y - centerY;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        return distance > clearRadius;
+    });
+}
+}
+
+// 触发ASCII形态变化并使用随机颜色
+function triggerAsciiMorph(x, y) {
+    // 选择一个随机ASCII图案
+    const pattern = asciiPatterns[Math.floor(Math.random() * asciiPatterns.length)];
+    
+    // 颜色选项
+    const colors = [
+        'rgba(255, 120, 120, 0.9)', // 红色
+        'rgba(120, 255, 120, 0.9)', // 绿色
+        'rgba(120, 120, 255, 0.9)'  // 蓝色
+    ];
+    
+    // 随机选择一种颜色
+    const randomColorIndex = Math.floor(Math.random() * colors.length);
+    const randomColor = colors[randomColorIndex];
+    const shadowColor = colors[randomColorIndex].replace('0.9', '0.5');
+    
+    // 获取此区域的字符进行动画处理
+    const radius = 150;
+    const chars = document.querySelectorAll('.character-fish');
+    const charsToAnimate = [];
+    
+    chars.forEach(charElem => {
+        const rect = charElem.getBoundingClientRect();
+        const charX = rect.left + rect.width / 2;
+        const charY = rect.top + rect.height / 2;
+        
+        const dx = charX - x;
+        const dy = charY - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < radius) {
+            charsToAnimate.push({
+                element: charElem,
+                x: charX,
+                y: charY,
+                distance: distance
+            });
+        }
+    });
+    
+    // 如果有足够的字符来动画处理
+    if (charsToAnimate.length > 5) {
+        // 定位morph容器
+        asciiMorphContainer.style.display = 'block';
+        asciiMorphContainer.style.left = (x - 100) + 'px';
+        asciiMorphContainer.style.top = (y - 100) + 'px';
+        
+        // 设置随机颜色
+        asciiMorphContainer.style.color = randomColor;
+        asciiMorphContainer.style.textShadow = `0 0 5px ${shadowColor}`;
+        
+        // 让字符向中心汇聚
+        charsToAnimate.forEach(char => {
+            // 添加发光动画
+            char.element.style.animation = 'charGlow 0.5s ease-in-out';
+            
+            // 向中心移动
+            setTimeout(() => {
+                const dx = x - char.x;
+                const dy = y - char.y;
+                char.element.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.0)';
+                char.element.style.transform = `translate(${dx}px, ${dy}px) scale(0.1)`;
+                
+                // 动画后移除
+                setTimeout(() => {
+                    if (char.element.parentNode) {
+                        char.element.parentNode.removeChild(char.element);
+                    }
+                }, 500);
+            }, Math.random() * 300);
+        });
+        
+        // 渲染初始空容器
+        AsciiMorph.render(['']);
+        
+        // 变形为ASCII图案
+        setTimeout(() => {
+            AsciiMorph.morph(pattern);
+            
+            // 变形动画完成后创建ASCII艺术元素
+            setTimeout(() => {
+                // 创建最终带颜色的ASCII艺术元素
+                createAsciiArt(pattern, x, y);
+                
+                // 隐藏morph容器
+                asciiMorphContainer.style.display = 'none';
+            }, 1000); // 等待变形动画完成
+        }, 700); // 在字符开始汇聚后开始
+    }
+}
+
+// 创建ASCII艺术元素
+function createAsciiArt(pattern, x, y) {
+    // 创建随机颜色 - 红、绿、蓝三种颜色
+    const colors = [
+        'rgba(255, 120, 120, 0.9)', // 红色
+        'rgba(120, 255, 120, 0.9)', // 绿色
+        'rgba(120, 120, 255, 0.9)'  // 蓝色
+    ];
+    
+    // 随机选择一种颜色
+    const randomColorIndex = Math.floor(Math.random() * colors.length);
+    const randomColor = colors[randomColorIndex];
+    
+    // 为阴影创建稍暗的颜色版本
+    const shadowColor = colors[randomColorIndex].replace('0.9', '0.5');
+    
+    // 创建ASCII艺术容器
+    const art = document.createElement('div');
+    art.className = 'ascii-art-container';
+    art.style.position = 'absolute';
+    art.style.left = (x - 75) + 'px';
+    art.style.top = (y - 75) + 'px';
+    art.style.fontSize = '8px';
+    art.style.opacity = '0';
+    art.style.transform = 'scale(0.5)';
+    art.style.transition = 'opacity 1s, transform 1s';
+    art.style.whiteSpace = 'pre';
+    art.textContent = pattern.join('\n');
+    
+    // 应用随机颜色
+    art.style.color = randomColor;
+    art.style.textShadow = `0 0 5px ${shadowColor}`;
+    
+    // 设置ID和添加数据属性
+    const artId = 'ascii-art-' + Date.now();
+    art.id = artId;
+    art.dataset.lastTransform = Date.now();
+    art.dataset.characterCollisions = '0';
+    art.dataset.colorIndex = randomColorIndex; // 存储颜色索引以便后续使用
+    
+    // 添加到ocean
+    ocean.appendChild(art);
+    
+    // 添加到活动ASCII艺术跟踪
+    activeAsciiArts.push({
+        id: artId,
+        element: art,
+        pattern: pattern,
+        x: x,
+        y: y,
+        colorIndex: randomColorIndex, // 存储颜色索引
+        createdAt: Date.now(),
+        lastTransform: Date.now(),
+        characterCollisions: 0
+    });
+    
+    // 淡入
+    setTimeout(() => {
+        art.style.opacity = '0.9';
+        art.style.transform = 'scale(1)';
+    }, 50);
+    
+    // 动画ASCII艺术
+    setTimeout(() => {
+        animateAsciiArt(art);
+    }, 1000);
+}
+
+// Animate ASCII art
+function animateAsciiArt(artElement) {
+    // Get starting position
+    const startX = parseFloat(artElement.style.left);
+    const startY = parseFloat(artElement.style.top);
+    
+    // Movement properties
+    const duration = 30000 + Math.random() * 20000; // 30-50 seconds
+    const amplitude = 15 + Math.random() * 20; // Wave height
+    const speedX = 0.05 + Math.random() * 0.1; // Horizontal movement speed
+    
+    // Start time
+    const startTime = Date.now();
+    
+    // Animation function
+    function update() {
+        // Skip if element was removed
+        if (!artElement.parentNode) return;
+        
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress < 1) {
+            // Calculate new position
+            const newX = startX + (progress * speedX * window.innerWidth);
+            const sinValue = Math.sin(progress * Math.PI * 2);
+            const newY = startY + (sinValue * amplitude);
+            
+            // Apply position
+            artElement.style.left = newX + 'px';
+            artElement.style.top = newY + 'px';
+            
+            // Check for collisions with character fish
+            checkAsciiCharCollisions(artElement);
+            
+            // Continue animation
+            requestAnimationFrame(update);
+        } else {
+            // Check if this is still in active arts list
+            removeFromActiveArts(artElement.id);
+            
+            // Remove when animation is done
+            artElement.remove();
+        }
+    }
+    
+    // Start animation
+    requestAnimationFrame(update);
+}
+
+// Check ASCII art collisions with characters
+function checkAsciiCharCollisions(artElement) {
+    // Get element from active list
+    const artData = activeAsciiArts.find(art => art.id === artElement.id);
+    if (!artData) return;
+    
+    // Throttle collision checks a bit for performance
+    const now = Date.now();
+    if (now - artData.lastCollisionCheck < 200) return;
+    artData.lastCollisionCheck = now;
+    
+    const artRect = artElement.getBoundingClientRect();
+    const charFishes = document.querySelectorAll('.character-fish');
+    
+    charFishes.forEach(fish => {
+        const fishRect = fish.getBoundingClientRect();
+        
+        // Simple collision detection
+        if (!(fishRect.right < artRect.left || 
+            fishRect.left > artRect.right || 
+            fishRect.bottom < artRect.top || 
+            fishRect.top > artRect.bottom)) {
+            
+            // Remove the fish
+            if (fish.parentNode) {
+                // Add glow animation before removing
+                fish.style.animation = 'charGlow 0.5s ease-out';
+                fish.style.opacity = '0';
+                
+                setTimeout(() => {
+                    if (fish.parentNode) {
+                        fish.parentNode.removeChild(fish);
+                    }
+                }, 500);
+            }
+            
+            // Increment collision counter
+            artData.characterCollisions++;
+            
+            // Transform ASCII art if enough collisions and not on cooldown
+            if (artData.characterCollisions >= 5 && // Further reduced threshold to make transformation easier
+                (now - artData.lastTransform) > 5000) { // Reduced to 5 seconds for better game flow
+                
+                artData.lastTransform = now;
+                transformAsciiArt(artElement);
+            }
+        }
+    });
+}
+
+// Remove from active ASCII arts tracking
+function removeFromActiveArts(id) {
+    const index = activeAsciiArts.findIndex(art => art.id === id);
+    if (index !== -1) {
+        activeAsciiArts.splice(index, 1);
+    }
+}
+// Transform ASCII艺术为新图案并使用随机颜色
+function transformAsciiArt(artElement) {
+    // 获取位置
+    const x = parseFloat(artElement.style.left) + artElement.offsetWidth / 2;
+    const y = parseFloat(artElement.style.top) + artElement.offsetHeight / 2;
+    
+    // 获取当前图案索引
+    const currentText = artElement.textContent;
+    
+    // 选择一个不同的图案
+    let newPatternIndex;
+    do {
+        newPatternIndex = Math.floor(Math.random() * asciiPatterns.length);
+    } while (asciiPatterns[newPatternIndex].join('\n') === currentText);
+    
+    // 颜色选项
+    const colors = [
+        'rgba(255, 120, 120, 0.9)', // 红色
+        'rgba(120, 255, 120, 0.9)', // 绿色
+        'rgba(120, 120, 255, 0.9)'  // 蓝色
+    ];
+    
+    // 随机选择新颜色
+    const randomColorIndex = Math.floor(Math.random() * colors.length);
+    const randomColor = colors[randomColorIndex];
+    const shadowColor = colors[randomColorIndex].replace('0.9', '0.5');
+    
+    // 将morph容器定位在艺术位置
+    asciiMorphContainer.style.display = 'block';
+    asciiMorphContainer.style.left = (x - 100) + 'px';
+    asciiMorphContainer.style.top = (y - 100) + 'px';
+    
+    // 应用新的随机颜色到morph容器
+    asciiMorphContainer.style.color = randomColor;
+    asciiMorphContainer.style.textShadow = `0 0 5px ${shadowColor}`;
+    
+    // 在ASCII艺术周围创建粒子效果
+    createTransformationParticles(x, y, randomColor, shadowColor);
+    
+    // 淡出原始艺术
+    artElement.style.transition = 'opacity 0.5s';
+    artElement.style.opacity = '0';
+    
+    setTimeout(() => {
+        // 移除原始ASCII艺术
+        if (artElement.parentNode) {
+            artElement.parentNode.removeChild(artElement);
+            removeFromActiveArts(artElement.id);
+        }
+        
+        // 变形到新图案
+        AsciiMorph.morph(asciiPatterns[newPatternIndex]);
+        
+        // 变形完成后，创建新的艺术
+        setTimeout(() => {
+            // 使用同一随机颜色创建新艺术
+            const art = document.createElement('div');
+            art.className = 'ascii-art-container';
+            art.style.position = 'absolute';
+            art.style.left = (x - 75) + 'px';
+            art.style.top = (y - 75) + 'px';
+            art.style.fontSize = '8px';
+            art.style.opacity = '0';
+            art.style.color = randomColor;
+            art.style.textShadow = `0 0 5px ${shadowColor}`;
+            art.style.transform = 'scale(0.5)';
+            art.style.transition = 'opacity 1s, transform 1s';
+            art.style.whiteSpace = 'pre';
+            art.textContent = asciiPatterns[newPatternIndex].join('\n');
+            
+            // 设置ID和添加数据属性
+            const artId = 'ascii-art-' + Date.now();
+            art.id = artId;
+            art.dataset.lastTransform = Date.now();
+            art.dataset.characterCollisions = '0';
+            art.dataset.colorIndex = randomColorIndex;
+            
+            // 添加到ocean
+            ocean.appendChild(art);
+            
+            // 添加到活动ASCII艺术跟踪
+            activeAsciiArts.push({
+                id: artId,
+                element: art,
+                pattern: asciiPatterns[newPatternIndex],
+                x: x,
+                y: y,
+                colorIndex: randomColorIndex,
+                createdAt: Date.now(),
+                lastTransform: Date.now(),
+                characterCollisions: 0
+            });
+            
+            // 淡入
+            setTimeout(() => {
+                art.style.opacity = '0.9';
+                art.style.transform = 'scale(1)';
+            }, 50);
+            
+            // 动画ASCII艺术
+            setTimeout(() => {
+                animateAsciiArt(art);
+            }, 1000);
+            
+            // 隐藏morph容器
+            asciiMorphContainer.style.display = 'none';
+        }, 1000);
+    }, 500);
+}
+
+// 创建变形粒子效果，使用指定颜色
+function createTransformationParticles(x, y, color = 'rgba(200, 220, 255, 0.9)', shadowColor = 'rgba(150, 200, 255, 0.8)') {
+    const particleCount = 30;
+    
+    for (let i = 0; i < particleCount; i++) {
+        // 创建粒子
+        const particle = document.createElement('div');
+        particle.className = 'character-fish';
+        particle.textContent = chars.charAt(Math.floor(Math.random() * chars.length));
+        particle.style.position = 'absolute';
+        particle.style.left = x + 'px';
+        particle.style.top = y + 'px';
+        particle.style.fontSize = (10 + Math.random() * 8) + 'px';
+        particle.style.color = color;
+        particle.style.textShadow = `0 0 8px ${shadowColor}`;
+        particle.style.zIndex = '250';
+        
+        // 添加到ocean
+        ocean.appendChild(particle);
+        
+        // 向外动画粒子
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 30 + Math.random() * 70;
+        const duration = 500 + Math.random() * 500;
+        
+        particle.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.3, 1.0), opacity ${duration}ms`;
+        
+        setTimeout(() => {
+            const destX = Math.cos(angle) * distance;
+            const destY = Math.sin(angle) * distance;
+            
+            particle.style.transform = `translate(${destX}px, ${destY}px) rotate(${Math.random() * 360}deg)`;
+            particle.style.opacity = '0';
+        }, 10);
+        
+        // 动画后移除
+        setTimeout(() => {
+            if (particle.parentNode) {
+                particle.parentNode.removeChild(particle);
+            }
+        }, duration + 100);
+    }
+}
+
+// Animate individual character
+function animateCharacter(charElem, index) {
+    // Random direction
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 50 + Math.random() * 50; // pixels per second
+    const dirX = Math.cos(angle) * speed;
+    const dirY = Math.sin(angle) * speed;
+    
+    // Start position
+    const startX = parseFloat(charElem.style.left);
+    const startY = parseFloat(charElem.style.top);
+    
+    // Start time
+    const startTime = Date.now();
+    const duration = 5000 + Math.random() * 5000; // 5-10 seconds
+    
+    // Animation function
+    function update() {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress < 1 && charElem.parentNode) {
+            // Calculate new position
+            const newX = startX + dirX * progress;
+            const newY = startY + dirY * progress;
+            
+            // Add sine wave movement
+            const waveAmplitude = 10;
+            const waveFrequency = 4 * Math.PI;
+            const waveOffset = Math.sin(progress * waveFrequency) * waveAmplitude;
+            
+            // Apply position with wave offset perpendicular to movement
+            const perpX = -dirY / speed;
+            const perpY = dirX / speed;
+            
+            charElem.style.left = (newX + perpX * waveOffset) + 'px';
+            charElem.style.top = (newY + perpY * waveOffset) + 'px';
+            
+            // Fade out near the end
+            if (progress > 0.7) {
+                charElem.style.opacity = 1 - ((progress - 0.7) / 0.3);
+            }
+            
+            // Continue animation
+            requestAnimationFrame(update);
+        } else if (charElem.parentNode) {
+            // Remove when animation is done
+            charElem.parentNode.removeChild(charElem);
+        }
+    }
+    
+    // Start animation
+    requestAnimationFrame(update);
+}
+
+// Animate a character fish with continuous movement
+function animateCharacterFish(charElem) {
+    // Get current position relative to container
+    const rect = charElem.getBoundingClientRect();
+    const containerRect = ocean.getBoundingClientRect();
+    
+    const left = rect.left - containerRect.left;
+    const top = rect.top - containerRect.top;
+    
+    // Set absolute position
+    charElem.style.position = 'absolute';
+    charElem.style.left = left + 'px';
+    charElem.style.top = top + 'px';
+    
+    // Remove from original container and add to ocean
+    if (charElem.parentNode !== ocean) {
+        charElem.parentNode.removeChild(charElem);
+        ocean.appendChild(charElem);
+    }
+    
+    // Movement properties
+    const duration = 20000 + Math.random() * 20000; // 20-40 seconds
+    const amplitude = 20 + Math.random() * 30; // Wave height
+    const speedX = 0.2 + Math.random() * 0.3; // Horizontal speed
+    
+    // Start time
+    const startTime = Date.now();
+    
+    // Animation function
+    function update() {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress < 1 && charElem.parentNode) {
+            // Calculate new position
+            const newX = left + (progress * speedX * window.innerWidth);
+            const sinValue = Math.sin(progress * Math.PI * 4);
+            const newY = top + (sinValue * amplitude);
+            
+            // Apply position
+            charElem.style.left = newX + 'px';
+            charElem.style.top = newY + 'px';
+            
+            // Continue animation
+            requestAnimationFrame(update);
+        } else if (charElem.parentNode) {
+            // Remove when animation is done
+            charElem.parentNode.removeChild(charElem);
+        }
+    }
+    
+    // Start animation
+    requestAnimationFrame(update);
+}
+// Push nearby characters when wave is created
+function pushNearbyCharacters(x, y) {
+    // Get all character elements
+    const charElements = document.querySelectorAll('.character-fish');
+    
+    // Effect radius
+    const radius = 150;
+    
+    // Check each character
+    charElements.forEach(charElem => {
+        // Get character position
+        const rect = charElem.getBoundingClientRect();
+        const charX = rect.left + rect.width / 2;
+        const charY = rect.top + rect.height / 2;
+        
+        // Calculate distance
+        const dx = charX - x;
+        const dy = charY - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If in range, apply push effect
+        if (distance < radius) {
+            // Calculate force (stronger closer to center)
+            const force = 1 - (distance / radius);
+            
+            // Calculate push direction
+            const angle = Math.atan2(dy, dx);
+            
+            // Push distances
+            const pushX = Math.cos(angle) * force * 50;
+            const pushY = (Math.sin(angle) * force * 30) - 20; // More upward bias
+            
+            // Apply push effect
+            charElem.style.transition = "transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1.0)";
+            charElem.style.transform = `translate(${pushX}px, ${pushY}px) rotate(${(Math.random() - 0.5) * 60}deg)`;
+            
+            // Enhance visual effect
+            charElem.style.transition += ", text-shadow 0.5s, color 0.5s";
+            charElem.style.textShadow = `0 0 ${5 + force * 10}px rgba(100, 150, 200, ${0.5 + force * 0.3})`;
+            
+            // Brighten if close to center
+            if (force > 0.5) {
+                charElem.style.color = 'rgba(180, 200, 220, 0.95)';
+                
+                // Reset after effect
+                setTimeout(() => {
+                    if (charElem.parentNode) {
+                        charElem.style.color = '';
+                        charElem.style.textShadow = '0 0 5px rgba(100, 150, 200, 0.5)';
+                    }
+                }, 600);
+            }
+        }
+    });
+}
+
+// Create a character fish
+function createCharacterFish(x, y) {
+    const charElem = document.createElement('div');
+    charElem.className = 'character-fish';
+    
+    // Random character
+    charElem.textContent = chars.charAt(Math.floor(Math.random() * chars.length));
+    
+    // Style
+    charElem.style.position = 'absolute';
+    charElem.style.left = x + 'px';
+    charElem.style.top = y + 'px';
+    charElem.style.fontSize = (10 + Math.floor(Math.random() * 8)) + 'px';
+    charElem.style.color = 'rgba(167, 182, 199, 0.7)';
+    charElem.style.textShadow = '0 0 5px rgba(100, 150, 200, 0.4)';
+    
+    // Add to ocean
+    ocean.appendChild(charElem);
+    
+    // Start animation
+    animateCharacterFish(charElem);
+}
+
+// Create some initial character fish
+function createInitialCharacters() {
+    console.log("Creating initial characters");
+    // Create more initial characters for better visual effect
+    for (let i = 0; i < 5; i++) {
+        const x = Math.random() * window.innerWidth;
+        const y = (window.innerHeight * 0.15) + (Math.random() * window.innerHeight * 0.7);
+        setTimeout(() => {
+            createCharacterFish(x, y);
+        }, i * 80);
+    }
+
+    
+
+    // Add notification to help players understand the mechanics
+    setTimeout(() => {
+        const notification = document.createElement('div');
+        notification.id = 'game-instruction-popup';
+        notification.style.position = 'fixed';
+        notification.style.top = '50%';
+        notification.style.left = '50%';
+        notification.style.transform = 'translate(-50%, -50%)';
+        notification.style.background = 'rgba(0, 0, 0, 0.7)';
+        notification.style.color = '#a7b6c7';
+        notification.style.padding = '15px 20px';
+        notification.style.borderRadius = '5px';
+        notification.style.fontFamily = 'monospace';
+        notification.style.fontSize = '16px';
+        notification.style.textAlign = 'left';
+        notification.style.zIndex = '1000';
+        notification.style.maxWidth = '80%';
+        notification.innerHTML = 'Earth has been swallowed by floods. Anthropocene is now a ruin. You are the planet’s last survivor, yet you are no mortal being.<br>'+
+        '<br>You are a shapeless current of WATER, holding the final remnants of memory.<br>'+
+        '<br>History, like water, flows into the abyss—-never to return. As exoplanetary archaeologists scan the remains, you decide what they will find about Earth.<br>'+
+        '<br>Water carries everything and erases everything. Do you want to help reconstruct humanity?<br><br><br>';        
+        
+        // 创建关闭按钮
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Be Water!';
+        closeButton.style.marginTop = '15px';
+        closeButton.style.padding = '8px 15px';
+        closeButton.style.background = 'rgba(60, 90, 120, 0.7)';
+        closeButton.style.border = '1px solid rgba(167, 182, 199, 0.3)';
+        closeButton.style.borderRadius = '4px';
+        closeButton.style.color = '#a7b6c7';
+        closeButton.style.fontFamily = 'monospace';
+        closeButton.style.cursor = 'pointer';
+        // 添加居中样式
+        closeButton.style.display = 'block';
+        closeButton.style.margin = '15px auto'; // 左右自动居中
+    
+        // 添加鼠标悬停效果
+        closeButton.style.transition = 'background 0.3s';
+        closeButton.addEventListener('mouseover', () => {
+            closeButton.style.background = 'rgba(80, 120, 160, 0.9)';
+        });
+        closeButton.addEventListener('mouseout', () => {
+            closeButton.style.background = 'rgba(60, 90, 120, 0.7)';
+        });
+    
+        // 添加点击事件 - 只关闭提示，不触发游戏计时
+        closeButton.addEventListener('click', (e) => {
+            // 阻止事件冒泡，防止触发gameContainer的点击事件
+            e.stopPropagation();
+        
+            // 尝试播放音频
+            audioElement.play();
+
+            // 淡出效果
+            notification.style.transition = 'opacity 1.5s';
+            notification.style.opacity = '0';
+        
+            // 移除元素
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 1500);
+        });
+    
+        // 将按钮添加到通知
+        notification.appendChild(document.createElement('br'));
+        notification.appendChild(closeButton);
+    
+        document.body.appendChild(notification);
+    }, 1000);
+    
+       // Periodically spawn new characters to maintain density
+
+    setInterval(() => {
+        if (document.querySelectorAll('.character-fish').length < 40) {
+            const x = Math.random() * window.innerWidth;
+            const y = (window.innerHeight * 0.15) + (Math.random() * window.innerHeight * 0.7);
+            createCharacterFish(x, y);
+        }
+    }, 2000);
+    }
+
+
+
+
+// Create rising bubbles from the bottom
+function createRisingBubbles(x) {
+    const bubbleContainer = document.createElement('div');
+    bubbleContainer.style.position = 'absolute';
+    bubbleContainer.style.left = (x - 10) + 'px';
+    bubbleContainer.style.top = 'calc(100% - 20px)';
+    bubbleContainer.style.pointerEvents = 'none';
+    bubbleContainer.style.zIndex = '60';
+    ocean.appendChild(bubbleContainer);
+
+    const bubbleCount = 12;
+    for (let i = 0; i < bubbleCount; i++) {
+        const bubble = document.createElement('div');
+        bubble.style.position = 'absolute';
+        bubble.style.left = (Math.random() * 20) + 'px';
+        bubble.style.bottom = '0px';
+        bubble.style.width = '6px';
+        bubble.style.height = '6px';
+        bubble.style.borderRadius = '50%';
+        bubble.style.backgroundColor = 'rgba(200, 220, 255, 0.8)';
+        bubble.style.opacity = '0.8';
+        bubble.style.transform = `scale(${0.5 + Math.random() * 1.5})`;
+
+        const duration = 1500 + Math.random() * 1000;
+        const offsetX = (Math.random() - 0.5) * 20;
+
+        bubble.style.transition = `transform ${duration}ms ease-out, bottom ${duration}ms ease-out, opacity ${duration}ms`;
+        setTimeout(() => {
+            bubble.style.bottom = '100px';
+            bubble.style.transform = `translateX(${offsetX}px) scale(1.0)`;
+            bubble.style.opacity = '0';
+        }, 10);
+
+        setTimeout(() => {
+            bubble.remove();
+        }, duration + 500);
+
+        bubbleContainer.appendChild(bubble);
+    }
+
+    setTimeout(() => bubbleContainer.remove(), 3000);
+}
+
+// Enhanced long-press bubbling logic
+let bubbleInterval = null;
+let bubbleStartTime = null;
+
+function startBubbleFlood(x) {
+    bubbleStartTime = Date.now();
+    bubbleInterval = setInterval(() => {
+        const elapsed = Date.now() - bubbleStartTime;
+
+        const spread = Math.min(300, 100 + elapsed / 5); // ±150px
+        const count = Math.min(100, 10 + Math.floor(elapsed / 25)); // max 100 per cycle
+
+        for (let i = 0; i < count; i++) {
+            const bubble = document.createElement('div');
+            bubble.style.position = 'absolute';
+            bubble.style.left = (x + (Math.random() * spread - spread / 2)) + 'px';
+            bubble.style.top = '85vh'; // bottom of ocean
+            const size = 3 + Math.random() * 4;
+            bubble.style.width = size + 'px';
+            bubble.style.height = size + 'px';
+            bubble.style.borderRadius = '50%';
+            bubble.style.backgroundColor = 'rgba(200, 220, 255, 0.75)';
+            bubble.style.opacity = '0.85';
+            bubble.style.pointerEvents = 'none';
+            bubble.style.zIndex = '60';
+            bubble.style.transform = `scale(${0.6 + Math.random() * 1.4})`;
+
+            const duration = 2000 + Math.random() * 1500;
+            const offsetX = (Math.random() - 0.5) * 60;
+
+            bubble.style.transition = `transform ${duration}ms ease-out, top ${duration}ms ease-out, opacity ${duration}ms`;
+            ocean.appendChild(bubble);
+
+            setTimeout(() => {
+                bubble.style.top = '15vh'; // horizon line
+                bubble.style.transform = `translateX(${offsetX}px) scale(1.0)`;
+                bubble.style.opacity = '0';
+            }, 10);
+
+            setTimeout(() => {
+                if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+            }, duration + 500);
+        }
+    }, 120);
+}
+
+function stopBubbleFlood() {
+    if (bubbleInterval) {
+        clearInterval(bubbleInterval);
+        bubbleInterval = null;
+    }
+}
+
+let ufoCooldown = false;
+
+function summonUFO() {
+    // 移除任何现有的UFO (避免重叠调用)
+    document.querySelectorAll('.ufo, .beam').forEach(el => el.remove());
+
+    const ufo = document.createElement('div');
+    ufo.className = 'ufo';
+    document.body.appendChild(ufo);
+
+    const beam = document.createElement('div');
+    beam.className = 'beam';
+    document.body.appendChild(beam);
+
+    let x = -100; // 从屏幕外开始
+    let direction = 1;
+    const speed = 2.7;
+    
+    // 确保光束正确跟随UFO
+    function alignBeam() {
+        // 基于UFO中心计算光束位置
+        const ufoWidth = ufo.offsetWidth || 128; 
+        const beamWidth = beam.offsetWidth || 240; 
+        const ufoCenter = x + (ufoWidth / 2);
+        const beamLeft = ufoCenter - (beamWidth / 2);
+        
+        // 设置光束位置
+        beam.style.left = beamLeft + 'px';
+    }
+
+    const interval = setInterval(() => {
+        x += speed * direction;
+        if (x > window.innerWidth - 100) {
+            direction = -1; // 向左移动
+        } else if (x < -100) {
+            direction = 1;  // 向右移动
+        }
+
+        // 更新UFO位置
+        ufo.style.left = x + 'px';
+        
+        // 更新光束位置跟随UFO
+        alignBeam();
+
+        // 处理ASCII艺术吸收
+        document.querySelectorAll('.ascii-art-container').forEach(el => {
+            const artRect = el.getBoundingClientRect();
+            const beamRect = beam.getBoundingClientRect();
+            
+            // 检查ASCII艺术是否在光束下方
+            if (artRect.left < beamRect.right && 
+                artRect.right > beamRect.left) {
+                
+                // 获取颜色索引并计数
+                const colorIndex = parseInt(el.dataset.colorIndex || 0);
+                if (colorIndex === 0) collectedAsciiColors.red++;
+                else if (colorIndex === 1) collectedAsciiColors.green++;
+                else if (colorIndex === 2) collectedAsciiColors.blue++;
+                collectedAsciiColors.total++;
+                
+                updateCollectionCounter(); // 更新收集计数器显示
+                
+                // 吸走效果
+                el.style.transition = 'transform 1.5s ease-in, opacity 1.5s';
+                el.style.transform = 'translateY(-200px) scale(0.5)';
+                el.style.opacity = '0';
+                
+                // 吸走ASCII艺术时产生字符碎片效果
+                createCharacterDebris(artRect.left + artRect.width/2, artRect.top + artRect.height/2);
+                
+                // 移除ASCII艺术
+                setTimeout(() => {
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                    // 从活动ASCII艺术跟踪中删除
+                    removeFromActiveArts(el.id);
+                }, 1500);
+            }
+        });
+    }, 30);
+    
+    // 在全局保存interval引用，以便游戏结束时清理
+    window.ufoInterval = interval;
+}
+
+// 更新收集计数器显示
+function updateCollectionCounter() {
+    const counter = document.getElementById('collection-counter');
+    if (counter) {
+        counter.textContent = `红色: ${collectedAsciiColors.red} | 绿色: ${collectedAsciiColors.green} | 蓝色: ${collectedAsciiColors.blue}`;
+    }
+}
+
+// 添加新函数：创建字符碎片效果
+
+
+function createCharacterDebris(x, y) {
+    // 当前正在被吸收的字符画数量
+    const activeAbsorptions = document.querySelectorAll('.ascii-art-container[style*="transform: translateY(-200px)"]').length;
+    // 根据同时吸收的数量调整粒子数
+    const debrisCount = Math.max(5, Math.floor((8 + Math.floor(Math.random() * 7)) / Math.max(1, activeAbsorptions)));
+    
+    for (let i = 0; i < debrisCount; i++) {
+        const charElem = document.createElement('div');
+        charElem.className = 'character-fish';
+        
+        // 随机字符
+        charElem.textContent = chars.charAt(Math.floor(Math.random() * chars.length));
+        
+        // 定位在ASCII艺术的中心
+        charElem.style.position = 'absolute';
+        charElem.style.left = x + 'px';
+        charElem.style.top = y + 'px';
+        charElem.style.fontSize = (10 + Math.floor(Math.random() * 8)) + 'px';
+        charElem.style.color = 'rgba(167, 182, 199, 0.9)';
+        charElem.style.textShadow = '0 0 5px rgba(100, 150, 200, 0.5)';
+        charElem.style.zIndex = '200';
+        
+        // 添加到海洋
+        ocean.appendChild(charElem);
+        
+        // 计算随机方向
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 20 + Math.random() * 80;
+        const duration = 1000 + Math.random() * 1500;
+        
+        // 动画爆炸效果
+        setTimeout(() => {
+            charElem.style.transition = `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.3, 1.0), opacity ${duration}ms`;
+            
+            const destX = Math.cos(angle) * distance;
+            const destY = Math.sin(angle) * distance;
+            
+            charElem.style.transform = `translate(${destX}px, ${destY}px) rotate(${Math.random() * 360}deg)`;
+            
+            // 让一些字符漂浮，一些消失
+            if (Math.random() > 0.3) {
+                setTimeout(() => {
+                    animateCharacterFish(charElem);
+                }, duration);
+            } else {
+                // 淡出并移除
+                charElem.style.opacity = '0';
+                setTimeout(() => {
+                    if (charElem.parentNode) charElem.parentNode.removeChild(charElem);
+                }, duration);
+            }
+        }, 10);
+    }
+}
+
+
+
+
+// Run initialization
+setTimeout(createInitialCharacters, 500);
+});
+
+window.addEventListener("load", () => {
+    const ufo = document.querySelector('.ufo');
+    const beam = document.querySelector('.beam');
+    const ufoImg = ufo?.querySelector('img');
+
+    if (!ufo || !beam || !ufoImg) return;
+
+    function alignBeam() {
+        const ufoRect = ufo.getBoundingClientRect();
+        const beamWidth = beam.offsetWidth;
+        const ufoCenter = ufo.offsetLeft + ufo.offsetWidth / 2;
+        const beamLeft = ufoCenter - beamWidth / 2;
+        beam.style.left = beamLeft + "px";
+    }
+
+    if (ufoImg.complete) {
+        alignBeam();
+    } else {
+        ufoImg.addEventListener('load', alignBeam);
+    }
+
+    window.addEventListener('resize', alignBeam);
+});
+
+</script>
+
+</body>
+</html>
